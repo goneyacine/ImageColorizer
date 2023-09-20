@@ -1,5 +1,3 @@
-import random
-import string
 from numpy import iterable
 import tensorflow as tf
 import os
