@@ -3,15 +3,19 @@ import tensorflow as tf
 import os
 import cv2
 import wandb
-
+import datetime
 
 class colorizer_gan:
     def __init__(self,d_lr=1e-4,g_lr=2e-4,batch_size=128):
          self.d_lr = d_lr
          self.g_lr = g_lr
          self.batch_size = batch_size
+         self.init_losses()
+         self.create_optimizers()
+         
+         
         
-    def create_generator(self):
+    def init_generator(self):
         #encoder
         input  = tf.keras.Input(shape=(32,32,1))
         conv1 = tf.keras.layers.Conv2D(64,(4,4),strides=(2,2),padding='same')(input)
@@ -46,7 +50,7 @@ class colorizer_gan:
         output = tf.keras.layers.Conv2DTranspose(3,(4,4),strides=(2,2),activation=tf.keras.activations.tanh,padding='same')(deconv3)
         return tf.keras.models.Model(inputs=input,outputs=output)
     
-    def create_discriminator(self):
+    def init_discriminator(self):
         input  = tf.keras.Input(shape=(32,32,4))
         conv1 = tf.keras.layers.Conv2D(64,(4,4),strides=(2,2),padding='same')(input)
         conv1 = tf.keras.layers.BatchNormalization()(conv1)
@@ -63,14 +67,12 @@ class colorizer_gan:
         output = tf.keras.layers.Conv2D(1,(4,4),strides=(2,2),padding='same',activation=None)(conv4)
         return tf.keras.models.Model(inputs=input,outputs=output)
     
-    def create(self):
-        self.create_optimizers()
-        self.init_losses()
-        self.generator = self.create_generator()
-        self.discriminator = self.create_discriminator()
+    def init_model(self):
+        self.generator = self.init_generator()
+        self.discriminator = self.init_discriminator()
     
         
-    def train(self,train_ds,valid_ds,epochs=1,auto_save=True,output_path='gan colorizer'):
+    def train(self,train_ds,valid_ds,epochs=1,auto_save=True,output_path='gan colorizer',colorizing_samples=None,colorize_samples=True):
         wandb.init(
             # set the wandb project where this run will be logged
             project="ImageColorizer",
@@ -125,6 +127,8 @@ class colorizer_gan:
              print('auto saving model...')
              self.save(output_path=output_path) 
              print('auto saving done...') 
+             if colorize_samples:
+                 self.colorize(colorizing_samples[0],colorizing_samples[1],output_folder='gan_results/'.join(str(i)))
         print('training finished...')    
              
     
@@ -185,5 +189,21 @@ class colorizer_gan:
         else:
          print(f'psnr {np.mean(psnr)} g_loss {np.mean(g_loss)} d_fake_loss {np.mean(d_fake_loss)} d_real_loss {np.mean(d_real_loss)}')
     
+    def load_model(self,folder_path='gan colorizer'):
+        self.generator = tf.keras.models.load_model(os.path.join(folder_path,'generator.keras'))
+        self.discriminator = tf.keras.models.load_model(os.path.join(folder_path,'discriminator.keras'))
     
-    
+    def colorize(self,gray_img,true_img,output_folder='gan_results',compare_to_original=True):
+        if self.generator == None or self.discriminator == None:
+            print('Error : model is not initialzed.')
+            return
+        if not os.path.exists(output_folder):
+            os.mkdir(output_folder)
+        ds = tf.data.Dataset.from_tensor_slices(gray_img)
+        ds = ds.batch(1)
+        results = self.generator.predict(ds)
+        for i in range(len(results)):
+           if compare_to_original:
+            cv2.imwrite(os.path.join(output_folder,str(i) +'.jpeg' ),cv2.hconcat([results[i] * 255,true_img[i]]))
+           else :
+            cv2.imwrite(os.path.join(output_folder,str(i) +'.jpeg' ),results[i] * 255)
