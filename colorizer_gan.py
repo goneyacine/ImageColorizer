@@ -165,7 +165,7 @@ class colorizer_gan:
         self.discriminator.save(os.path.join(output_path,'discriminator.keras'))
     
     def evaluate(self,ds,is_validate=True):
-        d_real_loss = np.empty(0)
+        d_real_loss = np.empty(0)   
         d_fake_loss = np.empty(0)
         g_loss = np.empty(0)
         psnr = np.empty(0)
